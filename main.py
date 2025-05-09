@@ -15,7 +15,7 @@ app.add_middleware(
 )
 
 # Path to the word list file
-WORD_LIST_FILE = "word_list.txt"
+WORD_LIST_FILE = "happy_words.txt"
 
 # Function to load words from file
 def load_words():
