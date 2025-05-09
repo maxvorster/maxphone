@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import random
+import os
 
 app = FastAPI()
 
@@ -13,8 +14,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Dummy word list (replace with your full 1774 list)
-word_list = ["happy", "heroic", "helpful", "heavenly"]
+# Path to the word list file
+WORD_LIST_FILE = "word_list.txt"
+
+# Function to load words from file
+def load_words():
+    if not os.path.exists(WORD_LIST_FILE):
+        raise Exception(f"Word list file {WORD_LIST_FILE} not found!")
+    
+    with open(WORD_LIST_FILE, "r") as file:
+        return [line.strip() for line in file.readlines()]
+
+# Load the word list once when the server starts
+word_list = load_words()
+
+# Active users and keys
 active_keys = {}
 user_keys = {}
 
