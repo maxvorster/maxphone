@@ -22,7 +22,11 @@ def assign_unique_word():
     available = list(set(word_list) - set(user_keys.keys()))
     return random.choice(available) if available else None
 
-@app.websocket("/register")
+@app.get("/")  # Homepage route
+def read_root():
+    return {"message": "FastAPI backend is running!"}
+
+@app.websocket("/register")  # WebSocket route
 async def register_user(websocket: WebSocket):
     await websocket.accept()
     word = assign_unique_word()
