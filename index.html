@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call App</title>
+</head>
+<body>
+    <h2>Video Call App</h2>
+
+    <!-- Display user key -->
+    <p id="userKey">Loading your key...</p>
+
+    <!-- Call other users -->
+    <input type="text" id="targetKey" placeholder="Enter target key" />
+    <button onclick="callUser()">Call</button>
+
+    <!-- Video elements -->
+    <h3>Your Video</h3>
+    <video id="myVideo" autoplay muted></video>
+    
+    <h3>Other's Video</h3>
+    <video id="otherVideo" autoplay></video>
+
+    <script>
+        // WebSocket connection to backend
+        const ws = new WebSocket("ws://localhost:8000/register");
+
+        // WebRTC variables
+        let localStream;
+        let peerConnection;
+        let targetKey = "";
+        const myVideo = document.getElementById("myVideo");
+        const otherVideo = document.getElementById("otherVideo");
+
+        // Get user's video stream
+        async function startUserMedia() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            myVideo.srcObject = stream;
+            localStream = stream;
+        }
+
+        // When the WebSocket connection is opened, send request for key
+        ws.onopen = () => {
+            console.log("Connected to server");
+            startUserMedia();
+        };
+
+        // When the WebSocket receives a message (from the server)
+        ws.onmessage = (message) => {
+            const data = message.data;
+            console.log("Received from server:", data);
+            if (data.startsWith("Your key is:")) {
+                const userKey = data.split(":")[1].trim();
+                document.getElementById("userKey").textContent = `Your key: ${userKey}`;
+            }
+            if (data.startsWith("Incoming call from")) {
+                const callerKey = data.split(" ")[3];
+                alert(`Incoming call from ${callerKey}`);
+                // Add logic here to answer the call
+            }
+        };
+
+        // Call another user by their key
+        function callUser() {
+            targetKey = document.getElementById("targetKey").value;
+            if (targetKey) {
+                ws.send("call:" + targetKey);
+                createPeerConnection();
+            }
+        }
+
+        // Create WebRTC peer connection and send offer to target
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection();
+
+            // Add local stream to peer connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            // Create offer
+            peerConnection.createOffer()
+                .then(offer => {
+                    return peerConnection.setLocalDescription(offer);
+                })
+                .then(() => {
+                    // Send the offer to the other user
+                    ws.send(JSON.stringify({ offer: peerConnection.localDescription }));
+                })
+                .catch(err => console.error("Error creating offer:", err));
+
+            // When remote stream is added, display it
+            peerConnection.ontrack = (event) => {
+                otherVideo.srcObject = event.streams[0];
+            };
+        }
+
+        // Handle incoming signaling messages (offer, answer, ICE candidates)
+        ws.onmessage = (message) => {
+            const data = JSON.parse(message.data);
+            if (data.offer) {
+                peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                peerConnection.createAnswer()
+                    .then(answer => {
+                        return peerConnection.setLocalDescription(answer);
+                    })
+                    .then(() => {
+                        ws.send(JSON.stringify({ answer: peerConnection.localDescription }));
+                    })
+                    .catch(err => console.error("Error creating answer:", err));
+            }
+
+            if (data.answer) {
+                peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            }
+
+            if (data.iceCandidate) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(data.iceCandidate));
+            }
+        };
+
+        // Handle ICE candidates
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                ws.send(JSON.stringify({ iceCandidate: event.candidate }));
+            }
+        };
+    </script>
+</body>
+</html>
